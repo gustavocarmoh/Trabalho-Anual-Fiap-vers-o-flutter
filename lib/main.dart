@@ -3,6 +3,7 @@ import 'package:fiap_20025/pages/create_account_page.dart';
 import 'package:fiap_20025/pages/dashboard_page.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:fiap_20025/services/api_service.dart'; // Added import
 
 void main() {
   runApp(MyApp());
@@ -36,23 +37,41 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  final ApiService _apiService = ApiService(); // Instantiate ApiService
 
   String? errorMessage;
+  bool _isLoading = false; // Added loading state
 
-  void _login() {
-    setState(() => errorMessage = null);
+  Future<void> _login() async { // Changed to async
+    setState(() {
+      errorMessage = null;
+      _isLoading = true; // Set loading true
+    });
 
     if (_formKey.currentState!.validate()) {
       final email = emailController.text.trim();
       final password = passwordController.text.trim();
 
-      if (email == 'teste@gmail.com' && password == 'teste') {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => DashboardPage()),
-        );
-      } else {
-        setState(() => errorMessage = 'Credenciais inválidas');
+      try {
+        final success = await _apiService.login(email, password);
+        if (success != null) {
+          Navigator.pushReplacement( // Use pushReplacement to not allow back to login
+            context,
+            MaterialPageRoute(builder: (_) => DashboardPage()),
+          );
+        } else {
+          setState(() => errorMessage = 'Credenciais inválidas ou erro na API.');
+        }
+      } catch (e) {
+        setState(() => errorMessage = 'Erro ao tentar fazer login: ${e.toString()}');
+      } finally {
+        if (mounted) { // Check if the widget is still in the tree
+          setState(() => _isLoading = false); // Set loading false
+        }
+      }
+    } else {
+      if (mounted) {
+        setState(() => _isLoading = false); // Also set loading false if form is invalid
       }
     }
   }
@@ -98,7 +117,7 @@ class _LoginPageState extends State<LoginPage> {
                           if (value == null || value.trim().isEmpty) {
                             return 'Email obrigatório';
                           }
-                          final emailRegex = RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$');
+                          final emailRegex = RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,5}$');
                           if (!emailRegex.hasMatch(value.trim())) {
                             return 'Email inválido';
                           }
@@ -129,7 +148,7 @@ class _LoginPageState extends State<LoginPage> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: TextButton(
-                          onPressed: () {
+                          onPressed: _isLoading ? null : () { // Disable if loading
                             Navigator.pushNamed(context, '/account_lost');
                           },
                           child: Text(
@@ -140,20 +159,31 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       SizedBox(height: 12),
                       if (errorMessage != null)
-                        Text(
-                          errorMessage!,
-                          style: TextStyle(color: Colors.red),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Text(
+                            errorMessage!,
+                            style: TextStyle(color: Colors.red, fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
                         ),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _login,
+                          onPressed: _isLoading ? null : _login, // Disable if loading
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryColor,
                             textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                            foregroundColor: Colors.white
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(vertical: 12),
                           ),
-                          child: Text('Entrar'),
+                          child: _isLoading 
+                               ? SizedBox(
+                                   height: 20, 
+                                   width: 20, 
+                                   child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white))
+                                 ) 
+                               : Text('Entrar'),
                         ),
                       ),
                     ],
@@ -162,7 +192,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               SizedBox(height: 16),
               TextButton(
-                onPressed: () {
+                onPressed: _isLoading ? null : () { // Disable if loading
                   Navigator.pushNamed(context, '/create_account');
                 },
                 child: Text(
